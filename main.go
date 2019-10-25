@@ -13,10 +13,10 @@ func main() {
 	runner := cmdrunner.CmdRunner{}
 	runner.Dir = args.Dir
 
-	output, err := runner.RunCommand("javac", "Main.java")
+	output, err := runner.RunCommand("java", "Main")
 
 	if err != nil {
-		fmt.Printf("Error: %s", err)
+		fmt.Printf("%s", err)
 	} else {
 		fmt.Printf("Output: %s", output)
 	}
