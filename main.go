@@ -13,12 +13,15 @@ func main() {
 	runner := cmdrunner.CmdRunner{}
 	runner.Dir = args.Dir
 
-	output, err := runner.RunCommand("java", "Main")
+	commandCompile := cmdrunner.Cmd{Name:"javac", Args:[]string{"Main.java"}}
+	commandRun := cmdrunner.Cmd{Name:"java", Args:[]string{"Main"}}
 
-	if err != nil {
-		fmt.Printf("%s", err)
+	cmdOutput := runner.RunCommands(commandCompile, commandRun)
+
+	if cmdOutput.Error != nil {
+		fmt.Printf("%s", cmdOutput.Error)
 	} else {
-		fmt.Printf("Output: %s", output)
+		fmt.Printf("Output: %v", cmdOutput.Output)
 	}
 
 }
