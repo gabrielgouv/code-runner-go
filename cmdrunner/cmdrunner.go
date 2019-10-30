@@ -11,32 +11,39 @@ import (
 
 type CmdRunner struct {
 	Dir string
+	MeasureTotalExecTime bool
 }
 
 func (c *CmdRunner) RunCommand(commands ...Cmd) (o CmdOutput) {
 
 	var outputs []string
+	var totalElapsed int64
 
 	for i := 0; i < len(commands); i++ {
 		logger.Infof("Step %d/%d : Running '%s %v'...", i + 1, len(commands), commands[i].Name, commands[i].Args)
 		output, elapsed, err := c.runCommand(commands[i])
 
 		if output != "" {
-			logger.Infof(" --> Output: %s", output)
+			logger.Infof(" └──> Output: %s", output)
 			outputs = append(outputs, output)
 		}
 
 		if err != nil {
 			o.Error = errors.New("Error running '" + commands[i].Name + "' command [" + strconv.Itoa(i + 1) + "]:\n" + o.Error.Error())
-			logger.Fatalf(" --> Error: %s", o.Error.Error())
+			logger.Fatalf(" └──> Error: %s", o.Error.Error())
 			break
 		}
 
-		logger.Infof(" --> Done in %s", elapsed)
+		logger.Infof(" └──> Finished in %s", elapsed)
+
+		if c.MeasureTotalExecTime || (!c.MeasureTotalExecTime && commands[i].MeasureExecTime) {
+			totalElapsed += elapsed.Milliseconds()
+		}
 
 	}
 
 	o.Output = outputs
+	o.ExecTime = totalElapsed
 
 	return
 }
