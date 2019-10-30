@@ -2,39 +2,48 @@ package cmdrunner
 
 import (
 	"errors"
+	"github.com/google/logger"
 	"io/ioutil"
 	"os/exec"
 	"strconv"
+	"time"
 )
 
 type CmdRunner struct {
 	Dir string
 }
 
-type Cmd struct {
-	Name string
-	Args []string
-}
+func (c *CmdRunner) RunCommand(commands ...Cmd) (o CmdOutput) {
 
-type CmdOutput struct {
-	Error error
-	Output []string
-}
-
-func (c *CmdRunner) RunCommands(commands ...Cmd) (o CmdOutput) {
+	var outputs []string
 
 	for i := 0; i < len(commands); i++ {
-		o = c.RunCommand(commands[i])
-		if o.Error != nil {
-			o.Error = errors.New("error running '" + commands[i].Name + "' command [" + strconv.Itoa(i) + "]:\n" + o.Error.Error())
-			return
+		logger.Infof("Step %d/%d : Running '%s %v'...", i + 1, len(commands), commands[i].Name, commands[i].Args)
+		output, elapsed, err := c.runCommand(commands[i])
+
+		if output != "" {
+			logger.Infof(" --> Output: %s", output)
+			outputs = append(outputs, output)
 		}
+
+		if err != nil {
+			o.Error = errors.New("Error running '" + commands[i].Name + "' command [" + strconv.Itoa(i + 1) + "]:\n" + o.Error.Error())
+			logger.Fatalf(" --> Error: %s", o.Error.Error())
+			break
+		}
+
+		logger.Infof(" --> Done in %s", elapsed)
+
 	}
+
+	o.Output = outputs
 
 	return
 }
 
-func (c *CmdRunner) RunCommand(command Cmd) (o CmdOutput) {
+func (c *CmdRunner) runCommand(command Cmd) (string, time.Duration, error) {
+
+	startTime := time.Now()
 
 	cmd := exec.Command(command.Name, command.Args...)
 
@@ -46,52 +55,46 @@ func (c *CmdRunner) RunCommand(command Cmd) (o CmdOutput) {
 	cmdErr, errCmdErr := cmd.StderrPipe()
 
 	if errCmdOut != nil {
-		return c.buildCmdOutput(errCmdErr, "Failed to connect stdout pipe. This is an internal Code Runner error.")
+		return "Failed to connect stdout pipe. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErr
 	}
 
 	if errCmdErr != nil {
-		return c.buildCmdOutput(errCmdErr, "Failed to connect stderr pipe. This is an internal Code Runner error.")
+		return "Failed to connect stderr pipe. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErr
 	}
 
 	err := cmd.Start()
 
 	if err != nil {
-		return c.buildCmdOutput(err, "Failed to start the command. This is an internal Code Runner error.")
+		return "Failed to start the command. This is an internal Code Runner error.", elapsedTime(startTime), err
 	}
 
 	cmdOutBytes, errCmdOutBytes := ioutil.ReadAll(cmdOut)
 	cmdErrBytes, errCmdErrBytes := ioutil.ReadAll(cmdErr)
 
 	if errCmdOutBytes != nil {
-		return c.buildCmdOutput(errCmdOutBytes, "Error reading stdout. This is an internal Code Runner error.")
+		return "Error reading stdout. This is an internal Code Runner error.", elapsedTime(startTime), errCmdOutBytes
 	}
 
 	if errCmdErrBytes != nil {
-		return c.buildCmdOutput(errCmdErrBytes, "Error reading stderr. This is an internal Code Runner error.")
+		return "Error reading stderr. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErrBytes
 	}
 
 	err = cmd.Wait()
 	if err != nil {
 		if cmdErrBytes != nil {
-			return c.buildCmdOutput(errors.New(string(cmdErrBytes)), "A program execution error has occurred.")
+			return "A program execution error has occurred.", elapsedTime(startTime), errors.New(string(cmdErrBytes))
 		}
-		return c.buildCmdOutput(errors.New("error waiting for process termination"), "Error waiting for process termination.")
+		return "Error waiting for process termination.", elapsedTime(startTime), errors.New("error waiting for process termination")
 	} else {
 
 		if string(cmdErrBytes) != "" {
-			return c.buildCmdOutput(errors.New(string(cmdErrBytes)), "A program execution error has occurred.")
+			return "A program execution error has occurred.", elapsedTime(startTime), errors.New(string(cmdErrBytes))
 		}
 
-		return c.buildCmdOutput(nil, string(cmdOutBytes))
+		return string(cmdOutBytes), elapsedTime(startTime), nil
 	}
 }
 
-func (c *CmdRunner) buildCmdOutput(error error, output ...string) (o CmdOutput) {
-
-	if error != nil {
-		o.Error = error
-	}
-	o.Output = output
-
-	return
+func elapsedTime(start time.Time) time.Duration {
+	return time.Since(start)
 }

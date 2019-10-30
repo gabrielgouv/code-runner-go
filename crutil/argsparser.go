@@ -1,4 +1,4 @@
-package argsparser
+package crutil
 
 import "flag"
 
@@ -9,6 +9,7 @@ type Args struct {
 	Output string
 	Location string
 	EnableAsyncTests bool
+	Log bool
 }
 
 // ParseArgs returns a struct with all arguments passed to program
@@ -19,6 +20,7 @@ func ParseArgs() (a Args) {
 	output := flag.String("output", "", "Output type (json or text). Default is text.")
 	location := flag.String("location", "", "Output location path.")
 	enableAsyncTests := flag.Bool("enable-async-tests", false, "Enables async tests execution. Default is false.")
+	log := flag.Bool("log", false, "Print info level logs to stdout.")
 
 	flag.Parse()
 
@@ -28,6 +30,7 @@ func ParseArgs() (a Args) {
 	a.Output = *output
 	a.Location = *location
 	a.EnableAsyncTests = *enableAsyncTests
+	a.Log = *log
 
 	return
 }
