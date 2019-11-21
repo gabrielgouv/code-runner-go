@@ -1,7 +1,10 @@
 package cmdrunner
 
+import "time"
+
 type Cmd struct {
 	Name string
 	Args []string
-	MeasureExecTime bool
+	MeasureExecutionTime bool
+	Timeout time.Duration
 }

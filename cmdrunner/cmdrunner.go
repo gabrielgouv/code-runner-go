@@ -1,9 +1,9 @@
 package cmdrunner
 
 import (
+	"context"
 	"errors"
 	"github.com/google/logger"
-	"io/ioutil"
 	"os/exec"
 	"strconv"
 	"time"
@@ -11,7 +11,8 @@ import (
 
 type CmdRunner struct {
 	Dir string
-	MeasureTotalExecTime bool
+	MeasureGlobalExecutionTime bool
+	GlobalTimeout time.Duration
 }
 
 func (c *CmdRunner) RunCommand(commands ...Cmd) (o CmdOutput) {
@@ -20,6 +21,7 @@ func (c *CmdRunner) RunCommand(commands ...Cmd) (o CmdOutput) {
 	var totalElapsed int64
 
 	for i := 0; i < len(commands); i++ {
+
 		logger.Infof("Step %d/%d : Running '%s %v'...", i + 1, len(commands), commands[i].Name, commands[i].Args)
 		output, elapsed, err := c.runCommand(commands[i])
 
@@ -34,72 +36,58 @@ func (c *CmdRunner) RunCommand(commands ...Cmd) (o CmdOutput) {
 			break
 		}
 
+		if elapsed.Milliseconds() == -1 {
+			break
+		}
+
 		logger.Infof(" └──> Finished in %s", elapsed)
 
-		if c.MeasureTotalExecTime || (!c.MeasureTotalExecTime && commands[i].MeasureExecTime) {
+		if c.MeasureGlobalExecutionTime || (!c.MeasureGlobalExecutionTime && commands[i].MeasureExecutionTime) {
 			totalElapsed += elapsed.Milliseconds()
 		}
 
 	}
 
 	o.Output = outputs
-	o.ExecTime = totalElapsed
+	o.ExecutionTime = totalElapsed
 
 	return
 }
 
 func (c *CmdRunner) runCommand(command Cmd) (string, time.Duration, error) {
 
+	// Max limit is 1 minute if nothing is set
+	timeout := 1 * time.Minute
+
+	if c.GlobalTimeout.Milliseconds() != 0 {
+		timeout = c.GlobalTimeout
+	} else if c.GlobalTimeout.Milliseconds() == 0 && command.Timeout.Milliseconds() != 0 {
+		timeout = command.Timeout
+	}
+
 	startTime := time.Now()
 
-	cmd := exec.Command(command.Name, command.Args...)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
 
 	if c.Dir != "" {
 		cmd.Dir = c.Dir
 	}
 
-	cmdOut, errCmdOut := cmd.StdoutPipe()
-	cmdErr, errCmdErr := cmd.StderrPipe()
+	out, err := cmd.Output()
 
-	if errCmdOut != nil {
-		return "Failed to connect stdout pipe. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErr
+	if ctx.Err() == context.DeadlineExceeded {
+		return "Execution timed out", -1, nil
 	}
-
-	if errCmdErr != nil {
-		return "Failed to connect stderr pipe. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErr
-	}
-
-	err := cmd.Start()
 
 	if err != nil {
-		return "Failed to start the command. This is an internal Code Runner error.", elapsedTime(startTime), err
-	}
-
-	cmdOutBytes, errCmdOutBytes := ioutil.ReadAll(cmdOut)
-	cmdErrBytes, errCmdErrBytes := ioutil.ReadAll(cmdErr)
-
-	if errCmdOutBytes != nil {
-		return "Error reading stdout. This is an internal Code Runner error.", elapsedTime(startTime), errCmdOutBytes
-	}
-
-	if errCmdErrBytes != nil {
-		return "Error reading stderr. This is an internal Code Runner error.", elapsedTime(startTime), errCmdErrBytes
-	}
-
-	err = cmd.Wait()
-	if err != nil {
-		if cmdErrBytes != nil {
-			return "A program execution error has occurred.", elapsedTime(startTime), errors.New(string(cmdErrBytes))
-		}
-		return "Error waiting for process termination.", elapsedTime(startTime), errors.New("error waiting for process termination")
+		return string(out), elapsedTime(startTime), errors.New("Non-zero exit code: " + err.Error())
 	} else {
-
-		if string(cmdErrBytes) != "" {
-			return "A program execution error has occurred.", elapsedTime(startTime), errors.New(string(cmdErrBytes))
-		}
-
-		return string(cmdOutBytes), elapsedTime(startTime), nil
+		return string(out), elapsedTime(startTime), nil
 	}
+
 }
 
 func elapsedTime(start time.Time) time.Duration {

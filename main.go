@@ -15,16 +15,23 @@ func main() {
 
 	// Init logger
 	defer logger.Init("CodeRunner", args.Log, false, ioutil.Discard).Close()
-	logger.SetFlags(log.LstdFlags)
+	logger.SetFlags(log.LUTC)
 
 	runner := cmdrunner.CmdRunner{}
 	runner.Dir = args.Dir
-	//runner.MeasureTotalExecTime = true
+	//runner.MeasureGlobalExecutionTime = true
 
-	commandCopy := cmdrunner.Cmd{Name: "cp", Args:[]string{"/Users/gabrielgouv/Documents/codes/Main.java", "/Users/gabrielgouv/Documents/codes/java/"}}
-	commandCompile := cmdrunner.Cmd{Name: "javac", Args:[]string{"Main.java"}}
-	commandRun := cmdrunner.Cmd{Name: "java", Args:[]string{"Main"}, MeasureExecTime:true}
-	commandRm := cmdrunner.Cmd{Name: "rm", Args:[]string{"Main.java", "Main.class"}}
+	//commandCopy := cmdrunner.Cmd{Name: "cp", Args:[]string{"/Users/gabrielgouv/Documents/codes/Main.java", "/Users/gabrielgouv/Documents/codes/java/"}}
+	//commandCompile := cmdrunner.Cmd{Name: "javac", Args:[]string{"Main.java"}}
+	//commandRun := cmdrunner.Cmd{Name: "java", Args:[]string{"Main"}, MeasureExecTime:true}
+	//commandRm := cmdrunner.Cmd{Name: "rm", Args:[]string{"Main.java", "Main.class"}}
+
+	commandCopy := crutil.StringToCommand("cp /Users/gabrielgouv/Documents/codes/Main.java /Users/gabrielgouv/Documents/codes/java/")
+	commandCompile := crutil.StringToCommand("javac Main.java")
+	commandRun := crutil.StringToCommand("java Main")
+	commandRun.MeasureExecutionTime = true
+	//commandRun.Timeout = 100 * time.Millisecond
+	commandRm := crutil.StringToCommand("rm Main.java Main.class")
 
 	cmdOutput := runner.RunCommand(commandCopy, commandCompile, commandRun, commandRm)
 
